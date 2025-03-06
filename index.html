@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Bulk Messenger</title>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        body {
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            min-height: 100vh;
+        }
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <!-- Login Section -->
+    <div id="loginSection" class="max-w-md mx-auto glass rounded-xl p-6 mb-8">
+        <h2 class="text-2xl font-bold text-white mb-4">WhatsApp Login</h2>
+        <div class="space-y-4">
+            <input type="tel" id="senderNumber" placeholder="Your WhatsApp Number (with country code)"
+                   class="w-full p-2 rounded bg-white/20 text-white placeholder-white/70 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50" value="+91">
+            <button onclick="login()" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded transition duration-300">
+                Login
+            </button>
+        </div>
+    </div>
+
+    <!-- Main App Section (Initially Hidden) -->
+    <div id="appSection" class="hidden">
+        <div class="grid md:grid-cols-2 gap-8">
+            <!-- Left Section: File Upload & Contacts -->
+            <div class="glass rounded-xl p-6">
+                <h2 class="text-2xl font-bold text-white mb-4">Upload Contacts</h2>
+                <div class="space-y-4">
+                    <input type="file" id="excelFile" accept=".xlsx,.xls" class="block w-full text-white file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-green-600 file:text-white hover:file:bg-green-700">
+                    <div id="preview" class="mt-4 bg-white/10 rounded p-4 text-white hidden">
+                        <h3 class="font-bold mb-2">Contacts Preview:</h3>
+                        <div id="contactsList" class="max-h-60 overflow-y-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Section: Message Template -->
+            <div class="glass rounded-xl p-6">
+                <h2 class="text-2xl font-bold text-white mb-4">Message Template</h2>
+                <textarea id="messageTemplate" rows="6" placeholder="Enter your message here... Use {name} for recipient's name"
+                          class="w-full p-4 rounded bg-white/20 text-white placeholder-white/70 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50"></textarea>
+                <button onclick="sendMessages()" class="mt-4 w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded transition duration-300">
+                    Send Messages
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading" class="loading">
+        <div class="glass p-8 rounded-xl text-white text-center">
+            <i class="bi bi-whatsapp text-4xl mb-4"></i>
+            <p>Sending messages...</p>
+        </div>
+    </div>
+
+    <script>
+        let contacts = [];
+        let isLoggedIn = false;
+
+        function login() {
+            const number = document.getElementById('senderNumber').value;
+            if (!number) {
+                Swal.fire({
+                    title: 'Error!',
+                    text: 'Please enter your WhatsApp number',
+                    icon: 'error',
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    confirmButtonColor: '#25D366'
+                });
+                return;
+            }
+
+            isLoggedIn = true;
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('appSection').classList.remove('hidden');
+
+            Swal.fire({
+                title: 'Success!',
+                text: 'Successfully logged in',
+                icon: 'success',
+                background: 'rgba(255, 255, 255, 0.9)',
+                confirmButtonColor: '#25D366'
+            });
+        }
+
+        document.getElementById('excelFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const data = e.target.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                contacts = XLSX.utils.sheet_to_json(firstSheet);
+
+                // Show preview
+                const preview = document.getElementById('preview');
+                const contactsList = document.getElementById('contactsList');
+                preview.classList.remove('hidden');
+                contactsList.innerHTML = contacts.map((contact, index) =>
+                    `<div class="mb-2">
+                        ${index + 1}. ${contact.name || 'No name'} - ${contact.number || 'No number'}
+                    </div>`
+                ).join('');
+            };
+
+            reader.readAsBinaryString(file);
+        });
+
+        async function sendMessages() {
+            if (!isLoggedIn) {
+                Swal.fire({
+                    title: 'Error!',
+                    text: 'Please login first',
+                    icon: 'error',
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    confirmButtonColor: '#25D366'
+                });
+                return;
+            }
+
+            if (contacts.length === 0) {
+                Swal.fire({
+                    title: 'Error!',
+                    text: 'Please upload contacts first',
+                    icon: 'error',
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    confirmButtonColor: '#25D366'
+                });
+                return;
+            }
+
+            const messageTemplate = document.getElementById('messageTemplate').value;
+            if (!messageTemplate) {
+                Swal.fire({
+                    title: 'Error!',
+                    text: 'Please enter a message template',
+                    icon: 'error',
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    confirmButtonColor: '#25D366'
+                });
+                return;
+            }
+
+            // Show loading
+            document.getElementById('loading').style.display = 'flex';
+
+            // Send messages to all contacts
+            for (const contact of contacts) {
+                const message = messageTemplate.replace(`${name}`, contact.name || 'Customer');
+                //const message = messageTemplate.replace(/{name}/g, contact.name || 'Customer');
+                try {
+                    const response = await fetch('http://localhost:3000/send-message', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phoneNumber: contact.number, message }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to send message');
+                    }
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                }
+            }
+
+            // Hide loading
+            document.getElementById('loading').style.display = 'none';
+            Swal.fire({
+                title: 'Success!',
+                text: `Messages sent successfully to ${contacts.length} contacts!`,
+                icon: 'success',
+                background: 'rgba(255, 255, 255, 0.9)',
+                confirmButtonColor: '#25D366'
+            });
+        }
+    </script>
+    <script src="javascript.js"></script>
+</body>
+</html>
